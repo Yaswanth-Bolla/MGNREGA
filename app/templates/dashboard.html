@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MGNREGA Dashboard - {{ translations[language]['district'] }}: {{ selected_district or 'Select District' }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .metric-card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+        .loading-spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">MGNREGA</h1>
+                    <span class="ml-2 text-sm text-gray-500">{{ translations[language]['historicalTitle'] }}</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="languageToggle" class="px-3 py-1 rounded-md text-sm font-medium
+                        {{ 'bg-blue-100 text-blue-800' if language == 'kn' else 'bg-gray-100 text-gray-800' }}">
+                        {{ 'ಕನ್ನಡ' if language == 'en' else 'English' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- District Selector -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                <div class="mb-4 sm:mb-0">
+                    <h2 class="text-lg font-semibold text-gray-900">{{ translations[language]['selectDistrict'] }}</h2>
+                    <p class="text-sm text-gray-600 mt-1">{{ translations[language]['historicalDescription'] }}</p>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                    <button id="locationBtn" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                        <i class="fas fa-map-marker-alt mr-2"></i>
+                        <span id="locationText">{{ translations[language]['locating'] }}</span>
+                    </button>
+                    <select id="districtSelect" class="block w-full sm:w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">{{ translations[language]['selectPlaceholder'] }}</option>
+                        {% for district in districts %}
+                        <option value="{{ district }}" {{ 'selected' if district == selected_district else '' }}>{{ district.title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        {% if current_data %}
+        <!-- Performance Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {% for key, term in terminology.items() %}
+            <div class="metric-card bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">{{ term['title'] }}</p>
+                        <p class="text-2xl font-bold text-gray-900 mt-1">
+                            {% if term['unit'] == 'lakhs' and current_data[key] >= 100000 %}
+                                {{ "%.1f"|format(current_data[key] / 100000) }}L
+                            {% elif term['unit'] == 'crores' and current_data[key] >= 10000000 %}
+                                {{ "%.1f"|format(current_data[key] / 10000000) }}Cr
+                            {% elif term['unit'] == 'days' %}
+                                {{ "%.1f"|format(current_data[key]) }} days
+                            {% elif term['unit'] == '%' %}
+                                {{ "%.1f"|format(current_data[key]) }}%
+                            {% elif term['unit'] == 'households' %}
+                                {{ current_data[key] | int }} households
+                            {% else %}
+                                {{ current_data[key] }}
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="text-gray-400">
+                        <i class="fas fa-chart-line text-2xl"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">{{ term['description'] }}</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Summary and AI Insights -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ translations[language]['summaryTitle'] }}</h3>
+                    <p class="text-sm text-gray-600 mb-4">{{ translations[language]['summaryDescription'] }}</p>
+                    <button id="generateInsightsBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                        <i class="fas fa-brain mr-2"></i>
+                        <span id="insightsBtnText">{{ translations[language]['generate'] }}</span>
+                    </button>
+                    <div id="insightsContent" class="mt-4 p-4 bg-gray-50 rounded-md hidden">
+                        <div id="insightsText" class="text-sm text-gray-700"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ translations[language]['feedbackTitle'] }}</h3>
+                <div class="flex space-x-2">
+                    <button class="feedback-btn inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" data-feedback="helpful">
+                        <i class="fas fa-thumbs-up mr-1"></i>
+                        {{ translations[language]['helpful'] }}
+                    </button>
+                    <button class="feedback-btn inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" data-feedback="not-helpful">
+                        <i class="fas fa-thumbs-down mr-1"></i>
+                        {{ translations[language]['notHelpful'] }}
+                    </button>
+                </div>
+                <div id="feedbackThanks" class="mt-4 p-3 bg-green-50 border border-green-200 rounded-md hidden">
+                    <p class="text-sm text-green-800">{{ translations[language]['feedbackThanksTitle'] }}</p>
+                    <p class="text-xs text-green-600 mt-1">{{ translations[language]['feedbackThanksDescription'] }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historical Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {% set chart_metrics = ['person_days_generated', 'total_expenditure', 'work_completion_rate', 'avg_days_of_employment'] %}
+            {% for metric in chart_metrics %}
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    {{ terminology[metric]['title'] }} - {{ translations[language]['historicalTrend'] }}
+                </h3>
+                <canvas id="chart-{{ metric }}" width="400" height="300"></canvas>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- No Data Message -->
+        <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+            <i class="fas fa-database text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+            <p class="text-gray-500">Please select a district to view performance data.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Global variables
+        let currentLanguage = '{{ language }}';
+        let selectedDistrict = '{{ selected_district }}';
+        let historicalData = JSON.parse('{{ historical_data | tojson | safe }}');
+        let terminology = JSON.parse('{{ terminology | tojson | safe }}');
+        let translations = JSON.parse('{{ translations | tojson | safe }}');
+
+        // Language toggle
+        document.getElementById('languageToggle').addEventListener('click', function() {
+            const newLang = currentLanguage === 'en' ? 'kn' : 'en';
+            window.location.href = `/?lang=${newLang}&district=${selectedDistrict}`;
+        });
+
+        // District selector
+        document.getElementById('districtSelect').addEventListener('change', function() {
+            const district = this.value;
+            window.location.href = `/?lang=${currentLanguage}&district=${district}`;
+        });
+
+        // Geolocation
+        document.getElementById('locationBtn').addEventListener('click', function() {
+            const btn = this;
+            const text = document.getElementById('locationText');
+            const originalText = text.textContent;
+
+            text.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>{{ translations[language]["locating"] }}';
+            btn.disabled = true;
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    fetch('/api/geolocation', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert(data.error);
+                        } else {
+                            text.textContent = `{{ translations[language]['autoDetected'] }}: ${data.district}`;
+                            document.getElementById('districtSelect').value = data.district;
+                            setTimeout(() => {
+                                window.location.href = `/?lang=${currentLanguage}&district=${data.district}`;
+                            }, 1500);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Failed to detect location');
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                    });
+                }, function(error) {
+                    console.error('Geolocation error:', error);
+                    alert('Unable to access location. Please select district manually.');
+                    text.textContent = originalText;
+                    btn.disabled = false;
+                });
+            } else {
+                alert('Geolocation is not supported by this browser.');
+                text.textContent = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // AI Insights
+        document.getElementById('generateInsightsBtn').addEventListener('click', function() {
+            const btn = this;
+            const btnText = document.getElementById('insightsBtnText');
+            const content = document.getElementById('insightsContent');
+            const text = document.getElementById('insightsText');
+
+            const originalText = btnText.textContent;
+            btnText.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>{{ translations[language]["generating"] }}';
+            btn.disabled = true;
+
+            fetch('/api/generate-insights', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    district: selectedDistrict,
+                    language: currentLanguage
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    text.innerHTML = data.insights;
+                    content.classList.remove('hidden');
+                    content.classList.add('fade-in');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to generate insights');
+            })
+            .finally(() => {
+                btnText.textContent = originalText;
+                btn.disabled = false;
+            });
+        });
+
+        // Feedback buttons
+        document.querySelectorAll('.feedback-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const feedback = this.dataset.feedback;
+                document.getElementById('feedbackThanks').classList.remove('hidden');
+                document.getElementById('feedbackThanks').classList.add('fade-in');
+
+                // Disable all feedback buttons
+                document.querySelectorAll('.feedback-btn').forEach(b => {
+                    b.disabled = true;
+                    b.classList.add('opacity-50');
+                });
+            });
+        });
+
+        // Chart.js initialization
+        {% if current_data %}
+        function createChart(canvasId, metricKey, data) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const term = terminology[metricKey];
+
+            const labels = data.map(item => `${item.month}/${item.year}`);
+            const values = data.map(item => item[metricKey]);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: term.title,
+                        data: values,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create charts for each metric
+        {% for metric in ['person_days_generated', 'total_expenditure', 'work_completion_rate', 'avg_days_of_employment'] %}
+        createChart('chart-{{ metric }}', '{{ metric }}', historicalData);
+        {% endfor %}
+        {% endif %}
+    </script>
+</body>
+</html>
